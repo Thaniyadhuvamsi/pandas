@@ -3,30 +3,37 @@
 # https://www.gitpod.io/docs/config-start-tasks/#configuring-the-terminal
 # -------------------------------------------------------------------------
 
-# images for gitpod pandas are in https://hub.docker.com/r/pandas/pandas-gitpod/tags
-# we're using the Dockerfile in the base of the repo
+# Images for Gitpod pandas are in https://hub.docker.com/r/pandas/pandas-gitpod/tags
+# We're using the Dockerfile in the base of the repo
 image:
   file: Dockerfile
+
 tasks:
   - name: Prepare development environment
     init: |
+      # Set up vscode settings
       mkdir -p .vscode
       cp gitpod/settings.json .vscode/settings.json
+
+      # Fetch Git tags
       git fetch --tags
+
+      # Install project dependencies
       python -m pip install -ve . --no-build-isolation --config-settings editable-verbose=true
       pre-commit install
     command: |
+      # Reinstall project dependencies
       python -m pip install -ve . --no-build-isolation --config-settings editable-verbose=true
       echo "✨ Pre-build complete! You can close this terminal ✨ "
 
 # --------------------------------------------------------
-# exposing ports for liveserve
+# Exposing ports for liveserve
 ports:
   - port: 5500
     onOpen: notify
 
 # --------------------------------------------------------
-# some useful extensions to have
+# Some useful extensions to have
 vscode:
   extensions:
     - ms-python.python
@@ -34,27 +41,27 @@ vscode:
     - eamodio.gitlens
     - lextudio.restructuredtext
     - ritwickdey.liveserver
-    # add or remove what you think is generally useful to most contributors
-    # avoid adding too many. they each open a pop-up window
+    # Add or remove what you think is generally useful to most contributors
+    # Avoid adding too many; they each open a pop-up window
 
 # --------------------------------------------------------
 # Using prebuilds for the container
-# With this configuration the prebuild will happen on push to main
+# With this configuration, the prebuild will happen on push to main
 github:
   prebuilds:
-    # enable for main/default branch
+    # Enable for main/default branch
     main: true
-    # enable for other branches (defaults to false)
+    # Enable for other branches (defaults to false)
     branches: false
-    # enable for pull requests coming from this repo (defaults to true)
+    # Enable for pull requests coming from this repo (defaults to true)
     pullRequests: false
-    # enable for pull requests coming from forks (defaults to false)
+    # Enable for pull requests coming from forks (defaults to false)
     pullRequestsFromForks: false
-    # add a check to pull requests (defaults to true)
+    # Add a check to pull requests (defaults to true)
     addCheck: false
-    # add a "Review in Gitpod" button as a comment to pull requests (defaults to false)
+    # Add a "Review in Gitpod" button as a comment to pull requests (defaults to false)
     addComment: false
-    # add a "Review in Gitpod" button to the pull request's description (defaults to false)
+    # Add a "Review in Gitpod" button to the pull request's description (defaults to false)
     addBadge: false
-    # add a label once the prebuild is ready to pull requests (defaults to false)
+    # Add a label once the prebuild is ready to pull requests (defaults to false)
     addLabel: false

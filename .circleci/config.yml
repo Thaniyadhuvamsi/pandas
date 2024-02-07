@@ -14,21 +14,19 @@ jobs:
     steps:
       - checkout
       - run: .circleci/setup_env.sh
-      - run: >
-          PATH=$HOME/miniconda3/envs/pandas-dev/bin:$HOME/miniconda3/condabin:$PATH
-          LD_PRELOAD=$HOME/miniconda3/envs/pandas-dev/lib/libgomp.so.1:$LD_PRELOAD
+      - run: |
+          export PATH=$HOME/miniconda3/envs/pandas-dev/bin:$HOME/miniconda3/condabin:$PATH
+          export LD_PRELOAD=$HOME/miniconda3/envs/pandas-dev/lib/libgomp.so.1:$LD_PRELOAD
           ci/run_tests.sh
+
   linux-musl:
     docker:
       - image: quay.io/pypa/musllinux_1_1_aarch64
     resource_class: arm.large
     steps:
-      # Install pkgs first to have git in the image
-      # (needed for checkout)
       - run: |
           apk update
-          apk add git
-          apk add musl-locales
+          apk add git musl-locales
       - checkout
       - run: |
           /opt/python/cp311-cp311/bin/python -m venv ~/virtualenvs/pandas-dev
@@ -41,10 +39,18 @@ jobs:
           . ~/virtualenvs/pandas-dev/bin/activate
           export PANDAS_CI=1
           python -m pytest -m 'not slow and not network and not clipboard and not single_cpu' pandas --junitxml=test-data.xml
+
   build-aarch64:
     parameters:
-      cibw-build:
-        type: string
+      cibw-build: &cibw-build
+        - "cp39-manylinux_aarch64"
+        - "cp310-manylinux_aarch64"
+        - "cp311-manylinux_aarch64"
+        - "cp312-manylinux_aarch64"
+        - "cp39-musllinux_aarch64"
+        - "cp310-musllinux_aarch64"
+        - "cp311-musllinux_aarch64"
+        - "cp312-musllinux_aarch64"
     machine:
       image: ubuntu-2004:2022.04.1
     resource_class: arm.large
@@ -55,13 +61,10 @@ jobs:
       - run:
           name: Check if build is necessary
           command: |
-            # Check if tag is defined or TRIGGER_SOURCE is scheduled
             if [[ -n "$CIRCLE_TAG" ]]; then
                 echo 'export IS_PUSH="true"' >> "$BASH_ENV"
             elif [[ $TRIGGER_SOURCE == "scheduled_pipeline" ]]; then
                 echo 'export IS_SCHEDULE_DISPATCH="true"' >> "$BASH_ENV"
-            # Look for the build label/[wheel build] in commit
-            # grep takes a regex, so need to escape brackets
             elif (git log --format=oneline -n 1 $CIRCLE_SHA1) | grep -q '\[wheel build\]'; then
                 : # Do nothing
             elif ! (curl https://api.github.com/repos/pandas-dev/pandas/issues/$CIRCLE_PR_NUMBER | jq '.labels' | grep -q 'Build'); then
@@ -69,24 +72,21 @@ jobs:
             fi
       - run:
           name: Build aarch64 wheels
-          no_output_timeout: 30m # Sometimes the tests won't generate any output, make sure the job doesn't get killed by that
+          no_output_timeout: 30m
           command: |
             pip3 install cibuildwheel==2.15.0
-            # When this is a nightly wheel build, allow picking up NumPy 2.0 dev wheels:
             if [[ "$IS_SCHEDULE_DISPATCH" == "true" || "$IS_PUSH" != 'true' ]]; then
                 export CIBW_ENVIRONMENT="PIP_EXTRA_INDEX_URL=https://pypi.anaconda.org/scientific-python-nightly-wheels/simple"
             fi
             cibuildwheel --prerelease-pythons --output-dir wheelhouse
 
           environment:
-            CIBW_BUILD: << parameters.cibw-build >>
+            CIBW_BUILD: *cibw-build
 
       - run:
           name: Install Anaconda Client & Upload Wheels
           command: |
-            echo "Install Mambaforge"
             MAMBA_URL="https://github.com/conda-forge/miniforge/releases/download/23.1.0-0/Mambaforge-23.1.0-0-Linux-aarch64.sh"
-            echo "Downloading $MAMBA_URL"
             wget -q $MAMBA_URL -O minimamba.sh
             chmod +x minimamba.sh
 
@@ -106,17 +106,15 @@ jobs:
 
 workflows:
   test:
-    # Don't run trigger this one when scheduled pipeline runs
     when:
       not:
-        equal: [ scheduled_pipeline, << pipeline.trigger_source >> ]
+        equal: [scheduled_pipeline, << pipeline.trigger_source >> ]
     jobs:
       - test-arm
   test-musl:
-    # Don't run trigger this one when scheduled pipeline runs
     when:
       not:
-        equal: [ scheduled_pipeline, << pipeline.trigger_source >> ]
+        equal: [scheduled_pipeline, << pipeline.trigger_source >> ]
     jobs:
       - linux-musl
   build-wheels:
@@ -127,11 +125,5 @@ workflows:
               only: /^v.*/
           matrix:
             parameters:
-              cibw-build: ["cp39-manylinux_aarch64",
-                           "cp310-manylinux_aarch64",
-                           "cp311-manylinux_aarch64",
-                           "cp312-manylinux_aarch64",
-                           "cp39-musllinux_aarch64",
-                           "cp310-musllinux_aarch64",
-                           "cp311-musllinux_aarch64",
-                           "cp312-musllinux_aarch64",]
+              cibw-build: *cibw-build
+
